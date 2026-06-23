@@ -1,0 +1,29 @@
+{
+  "name": "PropAI: 月次生成数リセット",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 0 1 * *" }]
+        }
+      },
+      "name": "毎月1日 0時に実行",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT reset_monthly_generation_count()",
+        "additionalFields": {}
+      },
+      "name": "全ユーザーの生成数をリセット",
+      "type": "n8n-nodes-base.postgres",
+      "position": [450, 300],
+      "credentials": { "postgres": { "id": "1", "name": "Supabase DB" } }
+    }
+  ],
+  "connections": {
+    "毎月1日 0時に実行": { "main": [[{ "node": "全ユーザーの生成数をリセット", "type": "main", "index": 0 }]] }
+  }
+}

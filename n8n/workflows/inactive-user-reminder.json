@@ -1,0 +1,43 @@
+{
+  "name": "PropAI: 未ログインユーザーへ自動リマインドメール",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 9 * * *" }]
+        }
+      },
+      "name": "毎朝9時に実行",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.id, p.email, p.last_login_at, p.plan, p.subscription_status FROM profiles p WHERE p.subscription_status = 'active' AND (p.last_login_at < NOW() - INTERVAL '7 days' OR p.last_login_at IS NULL) AND p.created_at > NOW() - INTERVAL '30 days'",
+        "additionalFields": {}
+      },
+      "name": "7日間未ログインのアクティブユーザー取得",
+      "type": "n8n-nodes-base.postgres",
+      "position": [450, 300],
+      "credentials": { "postgres": { "id": "1", "name": "Supabase DB" } }
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@propai.jp",
+        "toEmail": "={{ $json.email }}",
+        "subject": "【PropAI】最近使っていますか？活用事例をご紹介",
+        "html": "<div style='font-family:sans-serif;max-width:600px;margin:0 auto'><h2>PropAIの活用Tips</h2><p>しばらくログインがないためご連絡しました。</p><ul><li>物件説明文を3パターン同時生成</li><li>内覧案内メールをワンクリック作成</li><li>Instagram/X用の投稿文を自動生成</li></ul><a href='https://propai.jp/dashboard' style='display:inline-block;background:#1a56db;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:16px;'>ダッシュボードへ →</a></div>",
+        "options": {}
+      },
+      "name": "リマインドメール送信",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [650, 300],
+      "credentials": { "smtp": { "id": "2", "name": "Resend SMTP" } }
+    }
+  ],
+  "connections": {
+    "毎朝9時に実行": { "main": [[{ "node": "7日間未ログインのアクティブユーザー取得", "type": "main", "index": 0 }]] },
+    "7日間未ログインのアクティブユーザー取得": { "main": [[{ "node": "リマインドメール送信", "type": "main", "index": 0 }]] }
+  }
+}

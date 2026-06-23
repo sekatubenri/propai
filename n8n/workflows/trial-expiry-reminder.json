@@ -1,0 +1,43 @@
+{
+  "name": "PropAI: トライアル終了2日前リマインド",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 10 * * *" }]
+        }
+      },
+      "name": "毎朝10時に実行",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.email, p.company_name, p.generation_count FROM profiles p WHERE p.plan = 'free' AND p.created_at BETWEEN NOW() - INTERVAL '13 days' AND NOW() - INTERVAL '12 days'",
+        "additionalFields": {}
+      },
+      "name": "トライアル開始から12日経過したユーザー取得",
+      "type": "n8n-nodes-base.postgres",
+      "position": [450, 300],
+      "credentials": { "postgres": { "id": "1", "name": "Supabase DB" } }
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@propai.jp",
+        "toEmail": "={{ $json.email }}",
+        "subject": "【PropAI】無料トライアル残り2日です",
+        "html": "<div style='font-family:sans-serif;max-width:600px;margin:0 auto'><h2>無料トライアルは残り<span style='color:#e74c3c'>2日</span>です</h2><p>{{ $json.company_name }}様、PropAIをお試しいただきありがとうございます。</p><p>トライアル期間終了後も継続してご利用いただけます。</p><h3>これまでの生成数: {{ $json.generation_count }}件</h3><a href='https://propai.jp/settings' style='display:inline-block;background:#1a56db;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:16px;'>プランを選択して継続する →</a><p style='color:#999;font-size:12px;margin-top:16px;'>※ 解約を希望の場合は何もしなくてOKです（自動課金はされません）</p></div>",
+        "options": {}
+      },
+      "name": "トライアル終了2日前メール送信",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [650, 300],
+      "credentials": { "smtp": { "id": "2", "name": "Resend SMTP" } }
+    }
+  ],
+  "connections": {
+    "毎朝10時に実行": { "main": [[{ "node": "トライアル開始から12日経過したユーザー取得", "type": "main", "index": 0 }]] },
+    "トライアル開始から12日経過したユーザー取得": { "main": [[{ "node": "トライアル終了2日前メール送信", "type": "main", "index": 0 }]] }
+  }
+}
