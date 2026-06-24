@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+
+export const maxDuration = 60
 
 const client = new Anthropic()
 
@@ -75,42 +76,60 @@ ${form.features}
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('generation_count, generation_limit, plan')
+      .eq('id', user.id)
+      .single()
+
+    if (profile && profile.plan !== 'pro' && profile.generation_count >= profile.generation_limit) {
+      return Response.json({ error: 'Limit reached' }, { status: 429 })
+    }
+
+    const { type, form } = await request.json()
+    const prompt = buildPrompt(type, form)
+
+    const stream = await client.messages.stream({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: prompt }],
+    })
+
+    const encoder = new TextEncoder()
+    const readable = new ReadableStream({
+      async start(controller) {
+        let fullText = ''
+        for await (const event of stream) {
+          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+            fullText += event.delta.text
+            controller.enqueue(encoder.encode(event.delta.text))
+          }
+        }
+        controller.close()
+
+        await supabase.rpc('increment_generation_count', { user_id: user.id })
+        await supabase.from('generations').insert({
+          user_id: user.id,
+          input_data: form,
+          output_text: fullText,
+          generation_type: type,
+        })
+      },
+    })
+
+    return new Response(readable, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return Response.json({ error: message }, { status: 500 })
   }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('generation_count, generation_limit, plan')
-    .eq('id', user.id)
-    .single()
-
-  if (profile && profile.plan !== 'pro' && profile.generation_count >= profile.generation_limit) {
-    return NextResponse.json({ error: 'Limit reached' }, { status: 429 })
-  }
-
-  const { type, form } = await request.json()
-  const prompt = buildPrompt(type, form)
-
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
-    messages: [{ role: 'user', content: prompt }],
-  })
-
-  const result = message.content[0].type === 'text' ? message.content[0].text : ''
-
-  await supabase.rpc('increment_generation_count', { user_id: user.id })
-
-  await supabase.from('generations').insert({
-    user_id: user.id,
-    input_data: form,
-    output_text: result,
-    generation_type: type,
-  })
-
-  return NextResponse.json({ result })
 }

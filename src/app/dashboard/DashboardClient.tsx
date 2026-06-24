@@ -65,8 +65,23 @@ export default function DashboardClient({ profile, userEmail }: { profile: Profi
       return
     }
 
-    const data = await res.json()
-    setResult(data.result)
+    if (!res.ok) {
+      setResult('エラーが発生しました。もう一度お試しください。')
+      setLoading(false)
+      return
+    }
+
+    const reader = res.body?.getReader()
+    const decoder = new TextDecoder()
+    if (reader) {
+      let text = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        text += decoder.decode(value, { stream: true })
+        setResult(text)
+      }
+    }
     setLoading(false)
   }
 
