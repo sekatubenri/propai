@@ -18,23 +18,35 @@ export default function SignupPage() {
     setLoading(true)
     setError('')
 
-    const supabase = createClient()
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { company_name: company },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
+    try {
+      const supabase = createClient()
+      const result = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { company_name: company },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
 
-    if (error) {
-      setError(error.message || JSON.stringify(error))
+      if (result.error) {
+        setError(`[${result.error.status}] ${result.error.message || result.error.name || JSON.stringify(result.error)}`)
+        setLoading(false)
+        return
+      }
+
+      if (!result.data.user) {
+        setError('ユーザー作成に失敗しました。')
+        setLoading(false)
+        return
+      }
+
+      router.push('/dashboard')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : JSON.stringify(err)
+      setError(`例外: ${msg}`)
       setLoading(false)
-      return
     }
-
-    router.push('/dashboard')
   }
 
   return (
