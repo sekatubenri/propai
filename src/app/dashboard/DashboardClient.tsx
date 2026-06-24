@@ -66,7 +66,8 @@ export default function DashboardClient({ profile, userEmail }: { profile: Profi
     }
 
     if (!res.ok) {
-      setResult('エラーが発生しました。もう一度お試しください。')
+      const errData = await res.json().catch(() => ({}))
+      setResult(`エラー [${res.status}]: ${errData.error || '不明なエラー'}`)
       setLoading(false)
       return
     }
