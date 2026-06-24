@@ -29,7 +29,7 @@ export default function SignupPage() {
     })
 
     if (error) {
-      setError(error.message === 'User already registered' ? 'このメールアドレスはすでに登録されています。' : error.message)
+      setError(error.message || JSON.stringify(error))
       setLoading(false)
       return
     }
