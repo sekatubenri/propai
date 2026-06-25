@@ -30,7 +30,7 @@ export default function SignupPage() {
       })
 
       if (result.error) {
-        setError(`[${result.error.status}] ${result.error.message || result.error.name || JSON.stringify(result.error)}`)
+        setError(result.error.message === 'User already registered' ? 'このメールアドレスはすでに登録されています。' : (result.error.message || '登録に失敗しました。'))
         setLoading(false)
         return
       }
