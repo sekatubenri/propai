@@ -3,8 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 
 export const maxDuration = 60
 
-const client = new Anthropic()
-
 function buildPrompt(type: string, form: Record<string, string>): string {
   if (type === 'property') {
     return `あなたは不動産物件説明文の専門ライターです。以下の物件情報から、魅力的な説明文を3パターン生成してください。
@@ -81,7 +79,7 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return Response.json({ error: 'ログインが必要です' }, { status: 401 })
     }
 
     const { data: profile } = await supabase
@@ -91,45 +89,33 @@ export async function POST(request: Request) {
       .single()
 
     if (profile && profile.plan !== 'pro' && profile.generation_count >= profile.generation_limit) {
-      return Response.json({ error: 'Limit reached' }, { status: 429 })
+      return Response.json({ error: '今月の上限に達しました' }, { status: 429 })
     }
 
     const { type, form } = await request.json()
     const prompt = buildPrompt(type, form)
 
-    const stream = await client.messages.stream({
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+    const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
+      max_tokens: 1024,
       messages: [{ role: 'user', content: prompt }],
     })
 
-    const encoder = new TextEncoder()
-    const readable = new ReadableStream({
-      async start(controller) {
-        let fullText = ''
-        for await (const event of stream) {
-          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-            fullText += event.delta.text
-            controller.enqueue(encoder.encode(event.delta.text))
-          }
-        }
-        controller.close()
+    const result = message.content[0].type === 'text' ? message.content[0].text : ''
 
-        await supabase.rpc('increment_generation_count', { user_id: user.id })
-        await supabase.from('generations').insert({
-          user_id: user.id,
-          input_data: form,
-          output_text: fullText,
-          generation_type: type,
-        })
-      },
+    await supabase.rpc('increment_generation_count', { user_id: user.id })
+    await supabase.from('generations').insert({
+      user_id: user.id,
+      input_data: form,
+      output_text: result,
+      generation_type: type,
     })
 
-    return new Response(readable, {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    })
+    return Response.json({ result })
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
+    const message = err instanceof Error ? err.message : String(err)
     return Response.json({ error: message }, { status: 500 })
   }
 }

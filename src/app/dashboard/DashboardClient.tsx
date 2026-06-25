@@ -72,17 +72,8 @@ export default function DashboardClient({ profile, userEmail }: { profile: Profi
       return
     }
 
-    const reader = res.body?.getReader()
-    const decoder = new TextDecoder()
-    if (reader) {
-      let text = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        text += decoder.decode(value, { stream: true })
-        setResult(text)
-      }
-    }
+    const data = await res.json()
+    setResult(data.result)
     setLoading(false)
   }
 
